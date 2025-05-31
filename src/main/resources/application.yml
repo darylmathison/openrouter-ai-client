@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: chatgpt-client
+
+  r2dbc:
+    url: r2dbc:h2:mem:///chatgpt_client;SCHEMA=PUBLIC
+    username: sa
+    password:
+    pool:
+      initial-size: 10
+      max-size: 20
+
+  # Keep H2 console for development
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  # R2DBC doesn't use JPA, but we can configure SQL initialization
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+
+logging:
+  level:
+    com.chatgpt.client: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.r2dbc: DEBUG
+
+server:
+  port: 8080
+
+openai:
+  api:
+    key: ${OPENAI_API_KEY:your-openai-api-key-here}
+  default:
+    model: gpt-4
+    max-tokens: 1000
+    temperature: 0.7
