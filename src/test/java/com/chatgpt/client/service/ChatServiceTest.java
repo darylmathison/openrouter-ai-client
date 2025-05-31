@@ -18,12 +18,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 @ExtendWith(MockitoExtension.class)
 class ChatServiceTest {
+
+  private static final Logger logger = LoggerFactory.getLogger(ChatServiceTest.class);
 
   @Mock
   private ChatRepository chatRepository;
@@ -194,9 +198,8 @@ class ChatServiceTest {
           .expectError()
           .verify();
     } catch (Exception e) {
-      // Print the actual exception to see what's happening
-      System.out.println("Actual exception: " + e.getClass().getName() + ": " + e.getMessage());
-      e.printStackTrace();
+      // Log the actual exception to see what's happening
+      logger.debug("Actual exception: " + e.getClass().getName() + ": " + e.getMessage(), e);
       throw e;
     }
 
