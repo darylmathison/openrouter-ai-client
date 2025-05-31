@@ -32,7 +32,7 @@ class ChatServiceTest {
   private MessageRepository messageRepository;
 
   @Mock
-  private OpenAIService openAIService;
+  private AIService openAIService;
 
   @Mock
   private MarkdownService markdownService;

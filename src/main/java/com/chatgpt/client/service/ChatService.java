@@ -24,7 +24,7 @@ public class ChatService {
 
   private final ChatRepository chatRepository;
   private final MessageRepository messageRepository;
-  private final OpenAIService openAIService;
+  private final AIService openAIService;
   private final MarkdownService markdownService;
 
   public Mono<ChatResponse> sendMessage(Long chatId, ChatRequest request) {

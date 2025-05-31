@@ -24,13 +24,13 @@ class SavedPromptServiceTest {
   private SavedPromptRepository savedPromptRepository;
 
   @Mock
-  private OpenAIService openAIService;
+  private ChatService chatService;
 
   private SavedPromptService savedPromptService;
 
   @BeforeEach
   void setUp() {
-    savedPromptService = new SavedPromptService(savedPromptRepository, openAIService);
+    savedPromptService = new SavedPromptService(savedPromptRepository, chatService);
   }
 
   @Test
@@ -97,8 +97,8 @@ class SavedPromptServiceTest {
         .build();
 
     when(savedPromptRepository.findById(promptId)).thenReturn(Mono.just(savedPrompt));
-    when(savedPromptRepository.incrementUsageCount(promptId)).thenReturn(Mono.just(1));
-    when(openAIService.sendChatRequest(any())).thenReturn(Mono.just(expectedResponse));
+    when(savedPromptRepository.save(any(SavedPrompt.class))).thenReturn(Mono.just(savedPrompt));
+    when(chatService.sendMessage(any(), any())).thenReturn(Mono.just(expectedResponse));
 
     // When & Then
     StepVerifier.create(savedPromptService.executePrompt(promptId))

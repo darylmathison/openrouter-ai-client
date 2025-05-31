@@ -136,9 +136,7 @@
                   class="w-full p-2 border rounded" rows="2"></textarea>
         <div class="grid grid-cols-2 gap-2">
           <select id="prompt-model" class="p-2 border rounded">
-            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-            <option value="gpt-4">GPT-4</option>
-            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+            <!-- Models will be loaded dynamically -->
           </select>
           <input type="number" id="prompt-max-tokens" placeholder="Max Tokens"
                  class="p-2 border rounded" value="1000">
@@ -153,6 +151,123 @@
         <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded">Save</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settings-modal"
+     class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white rounded-lg p-6 w-[600px] max-w-full max-h-[90vh] overflow-y-auto">
+    <h3 class="text-lg font-semibold mb-4">Settings</h3>
+
+    <!-- Tabs -->
+    <div class="border-b border-gray-200 mb-4">
+      <ul class="flex flex-wrap -mb-px" role="tablist">
+        <li class="mr-2">
+          <button class="settings-tab-btn inline-block p-4 border-b-2 border-blue-600 rounded-t-lg active" 
+                  data-tab="models-tab">Models</button>
+        </li>
+        <li class="mr-2">
+          <button class="settings-tab-btn inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:border-gray-300" 
+                  data-tab="tools-tab">External Tools</button>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Models Tab -->
+    <div id="models-tab" class="settings-tab active">
+      <div class="mb-4">
+        <h4 class="font-medium mb-2">Select Models (max 5)</h4>
+        <div id="model-selection" class="space-y-2 max-h-60 overflow-y-auto">
+          <!-- Available models will be loaded here -->
+        </div>
+        <p class="text-sm text-red-500 mt-1 hidden" id="model-selection-error">
+          Please select at most 5 models.
+        </p>
+      </div>
+    </div>
+
+    <!-- External Tools Tab -->
+    <div id="tools-tab" class="settings-tab hidden">
+      <div class="mb-4">
+        <div class="flex justify-between items-center mb-2">
+          <h4 class="font-medium">External Tools</h4>
+          <button id="add-tool-btn" class="px-2 py-1 text-sm bg-blue-600 text-white rounded">
+            Add Tool
+          </button>
+        </div>
+
+        <div id="tools-list" class="space-y-2 max-h-60 overflow-y-auto">
+          <!-- Tools will be loaded here -->
+        </div>
+      </div>
+
+      <!-- Tool Form (initially hidden) -->
+      <div id="tool-form" class="border p-4 rounded-lg mt-4 hidden">
+        <h5 class="font-medium mb-2">Tool Configuration</h5>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Name</label>
+            <input type="text" id="tool-name" class="mt-1 w-full p-2 border rounded">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Description</label>
+            <input type="text" id="tool-description" class="mt-1 w-full p-2 border rounded">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Endpoint URL</label>
+            <input type="text" id="tool-endpoint" class="mt-1 w-full p-2 border rounded">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">HTTP Method</label>
+            <select id="tool-method" class="mt-1 w-full p-2 border rounded">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="DELETE">DELETE</option>
+              <option value="PATCH">PATCH</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Authentication</label>
+            <select id="tool-auth-type" class="mt-1 w-full p-2 border rounded">
+              <option value="NONE">None</option>
+              <option value="API_KEY">API Key</option>
+              <option value="BEARER_TOKEN">Bearer Token</option>
+              <option value="BASIC_AUTH">Basic Auth</option>
+            </select>
+          </div>
+          <div id="auth-config-container" class="hidden">
+            <!-- Auth config fields will be added dynamically -->
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Request Template</label>
+            <textarea id="tool-request-template" class="mt-1 w-full p-2 border rounded" rows="3"></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Response Mapping</label>
+            <textarea id="tool-response-mapping" class="mt-1 w-full p-2 border rounded" rows="3"></textarea>
+          </div>
+          <div class="flex justify-end space-x-2">
+            <button type="button" id="cancel-tool" class="px-3 py-1 text-sm text-gray-600 border rounded">
+              Cancel
+            </button>
+            <button type="button" id="save-tool" class="px-3 py-1 text-sm bg-blue-600 text-white rounded">
+              Save Tool
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-end space-x-2 mt-4">
+      <button type="button" id="cancel-settings" class="px-4 py-2 text-gray-600 border rounded">
+        Cancel
+      </button>
+      <button type="button" id="save-settings" class="px-4 py-2 bg-blue-600 text-white rounded">
+        Save
+      </button>
+    </div>
   </div>
 </div>
 
