@@ -3,7 +3,9 @@ package com.chatgpt.client.controller;
 import static org.mockito.Mockito.when;
 
 import com.chatgpt.client.service.AIService;
+import com.chatgpt.client.service.ChatService;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,11 +20,22 @@ class ModelControllerTest {
   @Mock
   private AIService aiService;
 
+  @Mock
+  private ChatService chatService;
+
   private ModelController modelController;
 
   @BeforeEach
   void setUp() {
-    modelController = new ModelController(aiService);
+    modelController = new ModelController(aiService, chatService);
+    // Set initialCredits via reflection since it's injected via @Value
+    try {
+      java.lang.reflect.Field field = ModelController.class.getDeclaredField("initialCredits");
+      field.setAccessible(true);
+      field.set(modelController, 10.0);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to set initialCredits", e);
+    }
   }
 
   @Test
@@ -84,6 +97,30 @@ class ModelControllerTest {
     // When & Then
     StepVerifier.create(modelController.updateSelectedModels(tooManyModels))
         .expectNextMatches(response -> response.getStatusCode().is4xxClientError())
+        .verifyComplete();
+  }
+
+  @Test
+  void getRemainingCredits_ReturnsCorrectCredits() {
+    // Given
+    Double totalCost = 3.5;
+    Double actualCredits = 8.2; // Mock actual credits from OpenRouter
+    when(chatService.getTotalCostThisMonth()).thenReturn(Mono.just(totalCost));
+    when(aiService.getCreditBalance()).thenReturn(Mono.just(actualCredits));
+
+    // When & Then
+    StepVerifier.create(modelController.getRemainingCredits())
+        .expectNextMatches(response -> {
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                return false;
+            }
+
+            Map<String, Object> body = response.getBody();
+            return body.get("initialCredits").equals(10.0) &&
+                   body.get("totalCost").equals(totalCost) &&
+                   body.get("calculatedRemainingCredits").equals(6.5) &&
+                   body.get("actualCredits").equals(actualCredits);
+        })
         .verifyComplete();
   }
 }

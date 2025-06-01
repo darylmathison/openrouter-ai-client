@@ -231,8 +231,24 @@ class ChatGPTClient {
         sendBtn.disabled = !hasMessage && !hasFiles;
     }
 
-    updateBalance() {
-        document.getElementById('balance-display').textContent = '$10.00 remaining';
+    async updateBalance() {
+        try {
+            const response = await fetch(`${this.apiBase}/models/credits`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch credits: ${response.status}`);
+            }
+
+            const data = await response.json();
+            // Use actual credits from OpenRouter if available, otherwise fall back to calculated remaining credits
+            const credits = data.actualCredits !== undefined ? data.actualCredits : data.calculatedRemainingCredits;
+            const formattedCredits = credits.toFixed(2);
+            document.getElementById('balance-display').textContent = `$${formattedCredits} remaining`;
+
+            console.log('Credits updated:', data);
+        } catch (error) {
+            console.error('Error updating balance:', error);
+            document.getElementById('balance-display').textContent = 'Credits unavailable';
+        }
     }
 
     updateCostEstimate() {
@@ -400,6 +416,8 @@ class ChatGPTClient {
     updateCostDisplay(cost) {
         if (cost) {
             console.log(`Message cost: $${cost.toFixed(4)}`);
+            // Update the balance to reflect the new cost
+            this.updateBalance();
         }
     }
 

@@ -28,7 +28,7 @@ public class AIService {
   @Value("${openrouter.default.model:deepseek/deepseek-r1-0528:free}")
   private String defaultModel;
 
-  @Value("${openrouter.default.max-tokens:1000}")
+  @Value("${openrouter.default.max-tokens:2000}")
   private Integer defaultMaxTokens;
 
   @Value("${openrouter.default.temperature:0.7}")
@@ -201,6 +201,38 @@ public class AIService {
               "anthropic/claude-3-sonnet",
               "google/gemini-pro"
           ));
+        });
+  }
+
+  /**
+   * Queries the OpenRouter API for the current credit balance.
+   * 
+   * @return A Mono containing the credit balance as a Double, or 0.0 if there's an error.
+   */
+  public Mono<Double> getCreditBalance() {
+    return webClient.get()
+        .uri("/credits")
+        .retrieve()
+        .bodyToMono(JsonNode.class)
+        .map(response -> {
+          // Extract credit balance from response
+          // The exact path depends on the OpenRouter API response structure
+          Double credits = response.path("data").path("total_credits").asDouble(0.0);
+          Double consumedCredits = response.path("data").path("total_usage").asDouble(0.0);
+          Double remainingCredits = credits - consumedCredits;
+          log.info("Retrieved credit balance from OpenRouter: {}", remainingCredits);
+          return remainingCredits;
+        })
+        .onErrorResume(e -> {
+          if (e.getMessage() != null && e.getMessage().contains("401 UNAUTHORIZED")) {
+            log.error("Authentication error with OpenRouter API. Please check your API key.", e);
+          } else if (e.getMessage() != null && e.getMessage().contains("404 NOT_FOUND")) {
+            log.error("Credit balance endpoint not found. Please check the OpenRouter API documentation.", e);
+          } else {
+            log.error("Error fetching credit balance from OpenRouter", e);
+          }
+          // Return 0.0 as a fallback
+          return Mono.just(0.0);
         });
   }
 }
