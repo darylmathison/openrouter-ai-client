@@ -61,7 +61,7 @@ class AIServiceTest {
     ArrayNode dataArray = responseJson.putArray("data");
 
     ObjectNode model1 = dataArray.addObject();
-    model1.put("id", "openai/gpt-3.5-turbo");
+    model1.put("id", "deepseek/deepseek-r1-0528:free");
 
     ObjectNode model2 = dataArray.addObject();
     model2.put("id", "openai/gpt-4");
@@ -79,7 +79,7 @@ class AIServiceTest {
     StepVerifier.create(aiService.getAvailableModels())
         .expectNextMatches(models ->
             models.size() == 3 &&
-                models.contains("openai/gpt-3.5-turbo") &&
+                models.contains("deepseek/deepseek-r1-0528:free") &&
                 models.contains("openai/gpt-4") &&
                 models.contains("anthropic/claude-3-opus"))
         .verifyComplete();
@@ -99,7 +99,7 @@ class AIServiceTest {
     StepVerifier.create(aiService.getAvailableModels())
         .expectNextMatches(models ->
             models.size() == 5 &&
-                models.contains("openai/gpt-3.5-turbo") &&
+                models.contains("deepseek/deepseek-r1-0528:free") &&
                 models.contains("openai/gpt-4") &&
                 models.contains("anthropic/claude-3-opus") &&
                 models.contains("anthropic/claude-3-sonnet") &&

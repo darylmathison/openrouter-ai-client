@@ -34,7 +34,7 @@ public class ModelController {
 
     // Default models if none are selected
     static {
-        selectedModels.add("openai/gpt-3.5-turbo");
+        selectedModels.add("deepseek/deepseek-r1-0528:free");
         selectedModels.add("openai/gpt-4");
         selectedModels.add("anthropic/claude-3-opus");
         selectedModels.add("anthropic/claude-3-sonnet");
