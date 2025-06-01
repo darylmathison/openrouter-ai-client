@@ -65,7 +65,7 @@ public class ChatService {
     // Save user message
     Message userMessage = Message.builder()
         .chatId(chatId)
-        .content(request.getMessages().get(0).getContent())
+        .content(request.getMessages().getFirst().getContent())
         .role(MessageRole.USER)
         .createdAt(LocalDateTime.now())
         .build();

@@ -20,9 +20,7 @@ public class WebConfig {
             .defaultHeader("Authorization", "Bearer " + apiKey)
             .defaultHeader("HTTP-Referer", "https://localhost") // Required by OpenRouter
             .defaultHeader("X-Title", "Custom ChatGPT Client") // Optional but recommended
-            .exchangeStrategies(ExchangeStrategies.builder().codecs(configurer -> {
-                configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024);
-            }).build())
+            .exchangeStrategies(ExchangeStrategies.builder().codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024)).build())
             .build();
     }
 }

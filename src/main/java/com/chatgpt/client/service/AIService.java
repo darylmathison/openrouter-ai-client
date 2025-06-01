@@ -8,18 +8,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
@@ -56,12 +51,14 @@ public class AIService {
           ObjectNode systemMessage = objectMapper.createObjectNode();
           systemMessage.put("role", "system");
           systemMessage.put("content", request.getSystemMessage());
-          messages.add(0, systemMessage);
+          messages.addFirst(systemMessage);
         }
 
         String model = request.getModel() != null ? request.getModel() : defaultModel;
-        Integer maxTokens = request.getMaxTokens() != null ? request.getMaxTokens() : defaultMaxTokens;
-        Double temperature = request.getTemperature() != null ? request.getTemperature() : defaultTemperature;
+        Integer maxTokens =
+            request.getMaxTokens() != null ? request.getMaxTokens() : defaultMaxTokens;
+        Double temperature =
+            request.getTemperature() != null ? request.getTemperature() : defaultTemperature;
 
         // Create request body
         ObjectNode requestBody = objectMapper.createObjectNode();
@@ -78,7 +75,8 @@ public class AIService {
             .retrieve()
             .bodyToMono(JsonNode.class)
             .map(response -> {
-              String responseContent = response.path("choices").path(0).path("message").path("content").asText();
+              String responseContent = response.path("choices").path(0).path("message")
+                  .path("content").asText();
 
               TokenUsage tokenUsage = TokenUsage.builder()
                   .promptTokens(response.path("usage").path("prompt_tokens").asInt())
@@ -182,10 +180,10 @@ public class AIService {
         .onErrorResume(e -> {
           log.error("Error fetching available models from OpenRouter", e);
           return Mono.just(List.of(
-              "openai/gpt-3.5-turbo", 
-              "openai/gpt-4", 
-              "anthropic/claude-3-opus", 
-              "anthropic/claude-3-sonnet", 
+              "openai/gpt-3.5-turbo",
+              "openai/gpt-4",
+              "anthropic/claude-3-opus",
+              "anthropic/claude-3-sonnet",
               "google/gemini-pro"
           ));
         });
