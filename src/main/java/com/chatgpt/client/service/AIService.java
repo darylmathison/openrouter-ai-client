@@ -25,13 +25,13 @@ public class AIService {
   private final CostCalculationService costCalculationService;
   private final ObjectMapper objectMapper;
 
-  @Value("${openai.default.model:gpt-3.5-turbo}")
+  @Value("${openrouter.default.model:deepseek/deepseek-r1-0528:free}")
   private String defaultModel;
 
-  @Value("${openai.default.max-tokens:1000}")
+  @Value("${openrouter.default.max-tokens:1000}")
   private Integer defaultMaxTokens;
 
-  @Value("${openai.default.temperature:0.7}")
+  @Value("${openrouter.default.temperature:0.7}")
   private Double defaultTemperature;
 
   public AIService(WebClient openRouterWebClient,
@@ -99,8 +99,13 @@ public class AIService {
                   .build();
             })
             .onErrorResume(e -> {
-              log.error("Error calling OpenRouter API", e);
-              return Mono.error(new RuntimeException("Failed to get response from OpenRouter", e));
+              if (e.getMessage() != null && e.getMessage().contains("401 UNAUTHORIZED")) {
+                log.error("Authentication error with OpenRouter API. Please check your API key.", e);
+                return Mono.error(new RuntimeException("Authentication failed with OpenRouter. Please ensure you have set a valid OPENROUTER_API_KEY environment variable.", e));
+              } else {
+                log.error("Error calling OpenRouter API", e);
+                return Mono.error(new RuntimeException("Failed to get response from OpenRouter", e));
+              }
             });
       } catch (Exception e) {
         log.error("Error preparing OpenRouter API request", e);
@@ -125,8 +130,13 @@ public class AIService {
             .bodyToMono(JsonNode.class)
             .map(response -> response.path("data").path(0).path("url").asText())
             .onErrorResume(e -> {
-              log.error("Error generating image with OpenRouter", e);
-              return Mono.error(new RuntimeException("Failed to generate image", e));
+              if (e.getMessage() != null && e.getMessage().contains("401 UNAUTHORIZED")) {
+                log.error("Authentication error with OpenRouter API. Please check your API key.", e);
+                return Mono.error(new RuntimeException("Authentication failed with OpenRouter. Please ensure you have set a valid OPENROUTER_API_KEY environment variable.", e));
+              } else {
+                log.error("Error generating image with OpenRouter", e);
+                return Mono.error(new RuntimeException("Failed to generate image", e));
+              }
             });
       } catch (Exception e) {
         log.error("Error preparing image generation request", e);
@@ -178,7 +188,12 @@ public class AIService {
           return models;
         })
         .onErrorResume(e -> {
-          log.error("Error fetching available models from OpenRouter", e);
+          if (e.getMessage() != null && e.getMessage().contains("401 UNAUTHORIZED")) {
+            log.error("Authentication error with OpenRouter API. Please check your API key.", e);
+            log.info("Returning default model list due to authentication failure");
+          } else {
+            log.error("Error fetching available models from OpenRouter", e);
+          }
           return Mono.just(List.of(
               "openai/gpt-3.5-turbo",
               "openai/gpt-4",

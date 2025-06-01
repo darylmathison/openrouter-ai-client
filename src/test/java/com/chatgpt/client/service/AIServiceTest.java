@@ -3,10 +3,14 @@ package com.chatgpt.client.service;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.chatgpt.client.dto.ChatRequest;
+import com.chatgpt.client.model.Message;
+import com.chatgpt.client.model.Message.MessageRole;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,7 +28,9 @@ class AIServiceTest {
 
   private WebClient webClientMock;
   private WebClient.RequestHeadersUriSpec requestHeadersUriSpecMock;
+  private WebClient.RequestBodyUriSpec requestBodyUriSpecMock;
   private WebClient.RequestHeadersSpec requestHeadersSpecMock;
+  private WebClient.RequestBodySpec requestBodySpecMock;
   private WebClient.ResponseSpec responseSpecMock;
 
   private AIService aiService;
@@ -35,7 +41,9 @@ class AIServiceTest {
     // Create mocks for WebClient chain
     webClientMock = mock(WebClient.class);
     requestHeadersUriSpecMock = mock(WebClient.RequestHeadersUriSpec.class);
+    requestBodyUriSpecMock = mock(WebClient.RequestBodyUriSpec.class);
     requestHeadersSpecMock = mock(WebClient.RequestHeadersSpec.class);
+    requestBodySpecMock = mock(WebClient.RequestBodySpec.class);
     responseSpecMock = mock(WebClient.ResponseSpec.class);
 
     // Create real ObjectMapper for JSON manipulation
@@ -97,5 +105,35 @@ class AIServiceTest {
                 models.contains("anthropic/claude-3-sonnet") &&
                 models.contains("google/gemini-pro"))
         .verifyComplete();
+  }
+  @Test
+  void sendChatRequest_AuthenticationError_ReturnsSpecificErrorMessage() {
+    // Given
+    Message message = new Message();
+    message.setRole(MessageRole.USER);
+    message.setContent("Test message");
+
+    ChatRequest chatRequest = ChatRequest.builder()
+        .messages(List.of(message))
+        .model("openai/gpt-4")
+        .build();
+
+    // Create a 401 UNAUTHORIZED exception
+    RuntimeException unauthorizedException = new RuntimeException("401 UNAUTHORIZED");
+
+    // Setup WebClient mock chain for POST request
+    when(webClientMock.post()).thenReturn(requestBodyUriSpecMock);
+    when(requestBodyUriSpecMock.uri("/chat/completions")).thenReturn(requestBodySpecMock);
+    when(requestBodySpecMock.contentType(org.springframework.http.MediaType.APPLICATION_JSON)).thenReturn(requestBodySpecMock);
+    when(requestBodySpecMock.bodyValue(org.mockito.ArgumentMatchers.anyString())).thenReturn(requestHeadersSpecMock);
+    when(requestHeadersSpecMock.retrieve()).thenReturn(responseSpecMock);
+    when(responseSpecMock.bodyToMono(JsonNode.class)).thenReturn(Mono.error(unauthorizedException));
+
+    // When & Then
+    StepVerifier.create(aiService.sendChatRequest(chatRequest))
+        .expectErrorMatches(throwable -> 
+            throwable.getMessage().contains("Authentication failed with OpenRouter") &&
+            throwable.getMessage().contains("OPENROUTER_API_KEY environment variable"))
+        .verify();
   }
 }

@@ -13,8 +13,7 @@ public class WebConfig {
     Logger logger = Logger.getLogger(WebConfig.class.getName());
 
     @Bean
-    public WebClient openRouterWebClient(@Value("${openai.api.key}") String apiKey) {
-        logger.info("OpenRouter WebClient bean created");
+    public WebClient openRouterWebClient(@Value("${openrouter.api.key}") String apiKey) {
         return WebClient.builder()
             .baseUrl("https://openrouter.ai/api/v1")
             .defaultHeader("Authorization", "Bearer " + apiKey)
