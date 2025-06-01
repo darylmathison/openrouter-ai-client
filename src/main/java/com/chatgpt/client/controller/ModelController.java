@@ -77,7 +77,7 @@ public class ModelController {
             Double totalCost = tuple.getT2();
 
             // For backward compatibility, also calculate the remaining credits based on initial credits
-            Double calculatedRemaining = initialCredits - totalCost;
+            double calculatedRemaining = initialCredits - totalCost;
             if (calculatedRemaining < 0) calculatedRemaining = 0.0;
 
             Map<String, Object> response = Map.of(
