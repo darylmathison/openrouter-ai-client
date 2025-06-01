@@ -10,13 +10,16 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Service
@@ -43,7 +46,9 @@ public class AIService {
         .defaultHeader("Authorization", "Bearer " + apiKey)
         .defaultHeader("HTTP-Referer", "https://localhost") // Required by OpenRouter
         .defaultHeader("X-Title", "Custom ChatGPT Client") // Optional but recommended
-        .build();
+        .exchangeStrategies(ExchangeStrategies.builder().codecs(configurer -> {
+      configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024);
+    }).build()).build();
     this.costCalculationService = costCalculationService;
     this.objectMapper = new ObjectMapper();
   }
@@ -52,7 +57,7 @@ public class AIService {
     return Mono.fromCallable(() -> {
       try {
         List<JsonNode> messages = convertToJsonMessages(request.getMessages());
-        
+
         // Add system message if present
         if (request.getSystemMessage() != null && !request.getSystemMessage().trim().isEmpty()) {
           ObjectNode systemMessage = objectMapper.createObjectNode();
@@ -60,11 +65,11 @@ public class AIService {
           systemMessage.put("content", request.getSystemMessage());
           messages.add(0, systemMessage);
         }
-        
+
         String model = request.getModel() != null ? request.getModel() : defaultModel;
         Integer maxTokens = request.getMaxTokens() != null ? request.getMaxTokens() : defaultMaxTokens;
         Double temperature = request.getTemperature() != null ? request.getTemperature() : defaultTemperature;
-        
+
         // Create request body
         ObjectNode requestBody = objectMapper.createObjectNode();
         requestBody.put("model", model);
@@ -72,7 +77,7 @@ public class AIService {
         messages.forEach(messagesNode::add);
         requestBody.put("max_tokens", maxTokens);
         requestBody.put("temperature", temperature);
-        
+
         return webClient.post()
             .uri("/chat/completions")
             .contentType(MediaType.APPLICATION_JSON)
@@ -81,22 +86,23 @@ public class AIService {
             .bodyToMono(JsonNode.class)
             .map(response -> {
               String responseContent = response.path("choices").path(0).path("message").path("content").asText();
-              
+
               TokenUsage tokenUsage = TokenUsage.builder()
                   .promptTokens(response.path("usage").path("prompt_tokens").asInt())
                   .completionTokens(response.path("usage").path("completion_tokens").asInt())
                   .totalTokens(response.path("usage").path("total_tokens").asInt())
                   .build();
-              
+
               Double estimatedCost = costCalculationService.calculateCost(
                   model,
                   tokenUsage.getPromptTokens(),
                   tokenUsage.getCompletionTokens()
               );
-              
+
               return ChatResponse.builder()
                   .content(responseContent)
                   .model(model)
+                  .temperature(temperature)
                   .tokenUsage(tokenUsage)
                   .estimatedCost(estimatedCost)
                   .build();
@@ -119,7 +125,7 @@ public class AIService {
         requestBody.put("prompt", prompt);
         requestBody.put("size", size != null ? size : "1024x1024");
         requestBody.put("n", n != null ? n : 1);
-        
+
         return webClient.post()
             .uri("/images/generations")
             .contentType(MediaType.APPLICATION_JSON)
@@ -148,14 +154,14 @@ public class AIService {
 
   private List<JsonNode> convertToJsonMessages(List<Message> messages) {
     List<JsonNode> jsonMessages = new ArrayList<>();
-    
+
     for (Message msg : messages) {
       ObjectNode jsonMessage = objectMapper.createObjectNode();
       jsonMessage.put("role", msg.getRole().toString().toLowerCase());
       jsonMessage.put("content", msg.getContent());
       jsonMessages.add(jsonMessage);
     }
-    
+
     return jsonMessages;
   }
 
@@ -177,6 +183,7 @@ public class AIService {
               models.add(model.path("id").asText());
             }
           }
+          models.sort(String::compareToIgnoreCase);
           return models;
         })
         .onErrorResume(e -> {

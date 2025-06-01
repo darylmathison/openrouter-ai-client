@@ -176,15 +176,13 @@ class ChatGPTClient {
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'message-actions flex space-x-2';
 
-        // Only add save/update buttons to user messages
-        if (role === 'user') {
-            // Save as prompt button
-            const saveBtn = document.createElement('button');
-            saveBtn.className = 'text-xs text-blue-600 hover:text-blue-800';
-            saveBtn.textContent = 'Save as Prompt';
-            saveBtn.addEventListener('click', () => this.showPromptModal(content, role));
-            actionsDiv.appendChild(saveBtn);
-        }
+        // Add save/update buttons to both user and assistant messages
+        // Save as prompt button
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'text-xs text-blue-600 hover:text-blue-800';
+        saveBtn.textContent = 'Save as Prompt';
+        saveBtn.addEventListener('click', () => this.showPromptModal(content, role, null, metadata));
+        actionsDiv.appendChild(saveBtn);
 
         headerDiv.appendChild(actionsDiv);
         messageDiv.appendChild(headerDiv);
@@ -409,7 +407,7 @@ class ChatGPTClient {
         document.getElementById('chat-title').textContent = title;
     }
 
-    showPromptModal(messageContent = '', messageRole = '', existingPromptId = null) {
+    showPromptModal(messageContent = '', messageRole = '', existingPromptId = null, metadata = {}) {
         // Populate the form with message content if provided
         if (messageContent) {
             document.getElementById('prompt-content').value = messageContent;
@@ -426,9 +424,19 @@ class ChatGPTClient {
             modelSelect.appendChild(option);
         });
 
-        // Set current model as selected
-        if (this.selectedModels.includes(this.currentModel)) {
+        // Set model from metadata if available, otherwise use current model
+        if (metadata && metadata.model) {
+            // If the model from metadata is in the selected models list, use it
+            if (this.selectedModels.includes(metadata.model)) {
+                modelSelect.value = metadata.model;
+            }
+        } else if (this.selectedModels.includes(this.currentModel)) {
             modelSelect.value = this.currentModel;
+        }
+
+        // Set temperature from metadata if available
+        if (metadata && metadata.temperature) {
+            document.getElementById('prompt-temperature').value = metadata.temperature;
         }
 
         // Store the existing prompt ID if we're updating
@@ -453,6 +461,19 @@ class ChatGPTClient {
 
         // Default to models tab
         this.switchSettingsTab('models-tab');
+
+        // Add event listener to search input
+        const searchInput = document.getElementById('model-search');
+        if (searchInput) {
+            // Remove existing listeners to prevent duplicates
+            const newSearchInput = searchInput.cloneNode(true);
+            searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+
+            // Add input event listener
+            newSearchInput.addEventListener('input', () => {
+                this.populateModelSelection(newSearchInput.value.trim().toLowerCase());
+            });
+        }
     }
 
     hideSettingsModal() {
@@ -608,12 +629,24 @@ class ChatGPTClient {
         }
     }
 
-    populateModelSelection() {
+    populateModelSelection(searchTerm = '') {
         const container = document.getElementById('model-selection');
         container.innerHTML = '';
 
-        // Create checkboxes for each available model
-        this.availableModels.forEach(model => {
+        // Get search term from input if not provided
+        if (!searchTerm && document.getElementById('model-search')) {
+            searchTerm = document.getElementById('model-search').value.trim().toLowerCase();
+        }
+
+        // Filter models based on search term
+        const filteredModels = searchTerm 
+            ? this.availableModels.filter(model => 
+                model.toLowerCase().includes(searchTerm) || 
+                this.formatModelName(model).toLowerCase().includes(searchTerm))
+            : this.availableModels;
+
+        // Create checkboxes for each filtered model
+        filteredModels.forEach(model => {
             const div = document.createElement('div');
             div.className = 'flex items-center';
 
@@ -643,6 +676,14 @@ class ChatGPTClient {
             div.appendChild(label);
             container.appendChild(div);
         });
+
+        // Show message if no models match the search
+        if (filteredModels.length === 0) {
+            const noResults = document.createElement('div');
+            noResults.className = 'text-gray-500 text-center py-2';
+            noResults.textContent = 'No models match your search.';
+            container.appendChild(noResults);
+        }
     }
 
     async saveSettings() {

@@ -1,6 +1,8 @@
 spring:
   application:
     name: chatgpt-client
+  codec:
+    max-in-memory-size: 16MB
 
   r2dbc:
     url: r2dbc:h2:mem:///chatgpt_client;SCHEMA=PUBLIC

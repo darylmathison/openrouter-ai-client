@@ -92,6 +92,7 @@ public class ChatService {
                           .then(Mono.just(ChatResponse.builder()
                               .content(aiResponse.getContent())
                               .model(aiResponse.getModel())
+                              .temperature(request.getTemperature())
                               .tokenUsage(aiResponse.getTokenUsage())
                               .estimatedCost(aiResponse.getEstimatedCost())
                               .chatId(chatId)
