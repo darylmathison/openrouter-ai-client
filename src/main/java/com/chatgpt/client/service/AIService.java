@@ -195,7 +195,7 @@ public class AIService {
             log.error("Error fetching available models from OpenRouter", e);
           }
           return Mono.just(List.of(
-              "openai/gpt-3.5-turbo",
+              "deepseek/deepseek-r1-0528:free",
               "openai/gpt-4",
               "anthropic/claude-3-opus",
               "anthropic/claude-3-sonnet",
