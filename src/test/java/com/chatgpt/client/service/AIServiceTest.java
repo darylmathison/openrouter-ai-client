@@ -46,11 +46,8 @@ class AIServiceTest {
         // Create real ObjectMapper for JSON manipulation
         objectMapper = new ObjectMapper();
 
-        // Create AIService with real dependencies
-        aiService = new AIService("test-api-key", costCalculationService);
-
-        // Replace the WebClient with our mock
-        ReflectionTestUtils.setField(aiService, "webClient", webClientMock);
+        // Create AIService with mocked WebClient
+        aiService = new AIService(webClientMock, costCalculationService);
     }
 
     @Test

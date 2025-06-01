@@ -39,16 +39,9 @@ public class AIService {
   @Value("${openai.default.temperature:0.7}")
   private Double defaultTemperature;
 
-  public AIService(@Value("${openai.api.key}") String apiKey,
+  public AIService(WebClient openRouterWebClient,
       CostCalculationService costCalculationService) {
-    this.webClient = WebClient.builder()
-        .baseUrl("https://openrouter.ai/api/v1")
-        .defaultHeader("Authorization", "Bearer " + apiKey)
-        .defaultHeader("HTTP-Referer", "https://localhost") // Required by OpenRouter
-        .defaultHeader("X-Title", "Custom ChatGPT Client") // Optional but recommended
-        .exchangeStrategies(ExchangeStrategies.builder().codecs(configurer -> {
-      configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024);
-    }).build()).build();
+    this.webClient = openRouterWebClient;
     this.costCalculationService = costCalculationService;
     this.objectMapper = new ObjectMapper();
   }
@@ -169,7 +162,7 @@ public class AIService {
     // Simple estimation: ~4 characters per token
     return (int) Math.ceil(text.length() / 4.0);
   }
-  
+
   public Mono<List<String>> getAvailableModels() {
     return webClient.get()
         .uri("/models")
