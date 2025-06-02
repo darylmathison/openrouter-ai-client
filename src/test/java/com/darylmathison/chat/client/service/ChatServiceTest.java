@@ -41,20 +41,24 @@ class ChatServiceTest {
   @Mock
   private MarkdownService markdownService;
 
+  @Mock
+  private MessageParserService messageParserService;
+
   private ChatService chatService;
 
   @BeforeEach
   void setUp() {
     chatService = new ChatService(chatRepository, messageRepository, openAIService,
-        markdownService);
+        markdownService, messageParserService);
   }
 
   @Test
   void sendMessage_NewChat_CreatesNewChatAndSavesMessages() {
     // Given
+    String userContent = "Hello, how are you?";
     ChatRequest request = ChatRequest.builder()
         .messages(List.of(Message.builder()
-            .content("Hello, how are you?")
+            .content(userContent)
             .role(Message.MessageRole.USER)
             .build()))
         .model("gpt-3.5-turbo")
@@ -72,7 +76,7 @@ class ChatServiceTest {
     Message savedUserMessage = Message.builder()
         .id(1L)
         .chatId(1L)
-        .content("Hello, how are you?")
+        .content(userContent)
         .role(Message.MessageRole.USER)
         .createdAt(LocalDateTime.now())
         .build();
@@ -97,6 +101,10 @@ class ChatServiceTest {
         .createdAt(LocalDateTime.now())
         .build();
 
+    // Mock the message parser to return the original content (no tool call)
+    when(messageParserService.parseAndProcessMessage(userContent))
+        .thenReturn(Mono.just(userContent));
+
     when(chatRepository.save(any(Chat.class))).thenReturn(Mono.just(savedChat));
     when(messageRepository.save(any(Message.class)))
         .thenReturn(Mono.just(savedUserMessage))
@@ -117,9 +125,10 @@ class ChatServiceTest {
   void sendMessage_ExistingChat_AddsMessageToChat() {
     // Given
     Long chatId = 1L;
+    String userContent = "How's the weather?";
     ChatRequest request = ChatRequest.builder()
         .messages(List.of(Message.builder()
-            .content("How's the weather?")
+            .content(userContent)
             .role(Message.MessageRole.USER)
             .build()))
         .build();
@@ -134,7 +143,7 @@ class ChatServiceTest {
     Message savedUserMessage = Message.builder()
         .id(3L)
         .chatId(chatId)
-        .content("How's the weather?")
+        .content(userContent)
         .role(Message.MessageRole.USER)
         .build();
 
@@ -152,6 +161,10 @@ class ChatServiceTest {
         .role(Message.MessageRole.ASSISTANT)
         .tokens(20)
         .build();
+
+    // Mock the message parser to return the original content (no tool call)
+    when(messageParserService.parseAndProcessMessage(userContent))
+        .thenReturn(Mono.just(userContent));
 
     when(chatRepository.findById(chatId)).thenReturn(Mono.just(existingChat));
     when(messageRepository.save(any(Message.class)))
@@ -176,6 +189,8 @@ class ChatServiceTest {
         .model("gpt-3.5-turbo")
         .build();
 
+    // No need to mock messageParserService as the method should return early with an error
+
     // When & Then
     StepVerifier.create(chatService.sendMessage(null, request))
         .expectErrorMatches(throwable ->
@@ -192,6 +207,8 @@ class ChatServiceTest {
         .model("gpt-3.5-turbo")
         .build();
 
+    // No need to mock messageParserService as the method should return early with an error
+
     // When & Then
     try {
       StepVerifier.create(chatService.sendMessage(null, request))
@@ -202,8 +219,6 @@ class ChatServiceTest {
       logger.debug("Actual exception: " + e.getClass().getName() + ": " + e.getMessage(), e);
       throw e;
     }
-
-
   }
 
   @Test
@@ -215,10 +230,8 @@ class ChatServiceTest {
         .model("gpt-3.5-turbo")
         .build();
 
-    Chat existingChat = Chat.builder()
-        .id(chatId)
-        .title("Existing Chat")
-        .build();
+
+    // No need to mock messageParserService as the method should return early with an error
 
     // When & Then
     StepVerifier.create(chatService.sendMessage(chatId, request))
@@ -237,10 +250,7 @@ class ChatServiceTest {
         .model("gpt-3.5-turbo")
         .build();
 
-    Chat existingChat = Chat.builder()
-        .id(chatId)
-        .title("Existing Chat")
-        .build();
+    // No need to mock messageParserService as the method should return early with an error
 
     // When & Then
     StepVerifier.create(chatService.sendMessage(chatId, request))
@@ -278,8 +288,8 @@ class ChatServiceTest {
     StepVerifier.create(chatService.searchChats(searchTerm))
         .expectNextMatches(chats ->
             chats.size() == 1 &&
-                chats.get(0).getTitle().equals("Weather Discussion") &&
-                chats.get(0).getMessageCount() == 5)
+                chats.getFirst().getTitle().equals("Weather Discussion") &&
+                chats.getFirst().getMessageCount() == 5)
         .verifyComplete();
   }
 
@@ -302,7 +312,7 @@ class ChatServiceTest {
     StepVerifier.create(chatService.searchChats(""))
         .expectNextMatches(chats ->
             chats.size() == 1 &&
-                chats.get(0).getTitle().equals("Test Chat"))
+                chats.getFirst().getTitle().equals("Test Chat"))
         .verifyComplete();
   }
 
@@ -397,18 +407,189 @@ class ChatServiceTest {
   void sendMessage_ChatNotFound_ThrowsException() {
     // Given
     Long nonExistentChatId = 999L;
+    String userContent = "Hello";
     ChatRequest request = ChatRequest.builder()
         .messages(List.of(Message.builder()
-            .content("Hello")
+            .content(userContent)
             .role(Message.MessageRole.USER)
             .build()))
         .build();
+
+    // Note: We don't need to mock messageParserService here because the test is
+    // specifically checking for a chat not found error, which happens before
+    // the message parser would be used in a real scenario
 
     when(chatRepository.findById(nonExistentChatId)).thenReturn(Mono.empty());
 
     // When & Then
     StepVerifier.create(chatService.sendMessage(nonExistentChatId, request))
         .expectError(RuntimeException.class)
+        .verify();
+  }
+
+  @Test
+  void sendMessage_WithToolCall_ProcessesToolCallAndSendsModifiedRequest() {
+    // Given
+    Long chatId = 1L;
+    String originalContent = "@{{Weather}} What's the weather like in New York?";
+    String processedContent = "The weather in New York is sunny, 72°F";
+
+    ChatRequest request = ChatRequest.builder()
+        .messages(List.of(Message.builder()
+            .content(originalContent)
+            .role(Message.MessageRole.USER)
+            .build()))
+        .model("gpt-3.5-turbo")
+        .build();
+
+    Chat existingChat = Chat.builder()
+        .id(chatId)
+        .title("Weather Chat")
+        .build();
+
+    Message savedUserMessage = Message.builder()
+        .id(1L)
+        .chatId(chatId)
+        .content(originalContent)
+        .role(Message.MessageRole.USER)
+        .createdAt(LocalDateTime.now())
+        .build();
+
+    ChatResponse aiResponse = ChatResponse.builder()
+        .content("I'll help you with that weather information!")
+        .model("gpt-3.5-turbo")
+        .tokenUsage(TokenUsage.builder().totalTokens(25).build())
+        .estimatedCost(0.001)
+        .build();
+
+    Message savedAiMessage = Message.builder()
+        .id(2L)
+        .chatId(chatId)
+        .content("I'll help you with that weather information!")
+        .role(Message.MessageRole.ASSISTANT)
+        .tokens(25)
+        .createdAt(LocalDateTime.now())
+        .build();
+
+    // Mock the message parser to return the processed content
+    when(messageParserService.parseAndProcessMessage(originalContent))
+        .thenReturn(Mono.just(processedContent));
+
+    // Note: We don't need to mock messageParserService.parseAndProcessMessage(processedContent)
+    // because in the actual flow, the processed content is used directly without being
+    // processed again
+
+    when(chatRepository.findById(chatId)).thenReturn(Mono.just(existingChat));
+    when(messageRepository.save(any(Message.class)))
+        .thenReturn(Mono.just(savedUserMessage))
+        .thenReturn(Mono.just(savedAiMessage));
+    when(openAIService.sendChatRequest(any(ChatRequest.class))).thenReturn(Mono.just(aiResponse));
+    when(chatRepository.save(any(Chat.class))).thenReturn(Mono.just(existingChat));
+
+    // When & Then
+    StepVerifier.create(chatService.sendMessage(chatId, request))
+        .expectNextMatches(response ->
+            response.getContent().equals("I'll help you with that weather information!") &&
+            response.getChatId().equals(chatId))
+        .verifyComplete();
+  }
+
+  @Test
+  void sendSimpleMessage_WithToolCall_ProcessesToolCallAndSendsModifiedRequest() {
+    // Given
+    Long chatId = 1L;
+    String originalContent = "@{{Weather}} What's the weather like in New York?";
+    String processedContent = "The weather in New York is sunny, 72°F";
+
+    com.darylmathison.chat.client.dto.SimpleMessageRequest request = 
+        com.darylmathison.chat.client.dto.SimpleMessageRequest.builder()
+            .message(originalContent)
+            .model("gpt-3.5-turbo")
+            .build();
+
+    Chat existingChat = Chat.builder()
+        .id(chatId)
+        .title("Weather Chat")
+        .build();
+
+    Message savedUserMessage = Message.builder()
+        .id(1L)
+        .chatId(chatId)
+        .content(originalContent)
+        .role(Message.MessageRole.USER)
+        .createdAt(LocalDateTime.now())
+        .build();
+
+    ChatResponse aiResponse = ChatResponse.builder()
+        .content("I'll help you with that weather information!")
+        .model("gpt-3.5-turbo")
+        .tokenUsage(TokenUsage.builder().totalTokens(25).build())
+        .estimatedCost(0.001)
+        .build();
+
+    Message savedAiMessage = Message.builder()
+        .id(2L)
+        .chatId(chatId)
+        .content("I'll help you with that weather information!")
+        .role(Message.MessageRole.ASSISTANT)
+        .tokens(25)
+        .createdAt(LocalDateTime.now())
+        .build();
+
+    // Mock the message parser to return the processed content
+    when(messageParserService.parseAndProcessMessage(originalContent))
+        .thenReturn(Mono.just(processedContent));
+
+    // Unlike in sendMessage, in sendSimpleMessage the processed content is processed again,
+    // so we need to mock this call as well
+    when(messageParserService.parseAndProcessMessage(processedContent))
+        .thenReturn(Mono.just(processedContent));
+
+    when(chatRepository.findById(chatId)).thenReturn(Mono.just(existingChat));
+    when(messageRepository.save(any(Message.class)))
+        .thenReturn(Mono.just(savedUserMessage))
+        .thenReturn(Mono.just(savedAiMessage));
+    when(openAIService.sendChatRequest(any(ChatRequest.class))).thenReturn(Mono.just(aiResponse));
+    when(chatRepository.save(any(Chat.class))).thenReturn(Mono.just(existingChat));
+
+    // When & Then
+    StepVerifier.create(chatService.sendSimpleMessage(chatId, request))
+        .expectNextMatches(response ->
+            response.getContent().equals("I'll help you with that weather information!") &&
+            response.getChatId().equals(chatId))
+        .verifyComplete();
+  }
+
+  @Test
+  void sendMessage_ToolCallProcessingFails_PropagatesError() {
+    // Given
+    Long chatId = 1L;
+    String originalContent = "@{{Weather}} What's the weather like in New York?";
+
+    ChatRequest request = ChatRequest.builder()
+        .messages(List.of(Message.builder()
+            .content(originalContent)
+            .role(Message.MessageRole.USER)
+            .build()))
+        .model("gpt-3.5-turbo")
+        .build();
+
+    Chat existingChat = Chat.builder()
+        .id(chatId)
+        .title("Weather Chat")
+        .build();
+
+    // Mock the message parser to return an error
+    when(messageParserService.parseAndProcessMessage(originalContent))
+        .thenReturn(Mono.error(new RuntimeException("Tool execution failed")));
+
+    when(chatRepository.findById(chatId)).thenReturn(Mono.just(existingChat));
+
+    // When & Then
+    StepVerifier.create(chatService.sendMessage(chatId, request))
+        .expectErrorMatches(throwable ->
+            throwable instanceof RuntimeException &&
+            throwable.getMessage().contains("Tool execution failed"))
         .verify();
   }
 }

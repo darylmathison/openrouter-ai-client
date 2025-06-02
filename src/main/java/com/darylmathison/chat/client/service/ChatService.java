@@ -26,6 +26,7 @@ public class ChatService {
   private final MessageRepository messageRepository;
   private final AIService openAIService;
   private final MarkdownService markdownService;
+  private final MessageParserService messageParserService;
 
   public Mono<ChatResponse> sendMessage(Long chatId, ChatRequest request) {
     if (request.getMessages() == null || request.getMessages().isEmpty()) {
@@ -62,44 +63,75 @@ public class ChatService {
   }
 
   private Mono<ChatResponse> processMessageAndGetResponse(Long chatId, ChatRequest request) {
-    // Save user message
-    Message userMessage = Message.builder()
-        .chatId(chatId)
-        .content(request.getMessages().getFirst().getContent())
-        .role(MessageRole.USER)
-        .createdAt(LocalDateTime.now())
-        .build();
+    String userContent = request.getMessages().getFirst().getContent();
 
-    return messageRepository.save(userMessage)
-        .flatMap(savedUserMessage -> {
-          // Get AI response
-          return openAIService.sendChatRequest(request)
-              .flatMap(aiResponse -> {
-                // Save AI response message
-                Message aiMessage = Message.builder()
-                    .chatId(chatId)
-                    .content(aiResponse.getContent())
-                    .role(MessageRole.ASSISTANT)
-                    .createdAt(LocalDateTime.now())
-                    .tokens(aiResponse.getTokenUsage() != null ? aiResponse.getTokenUsage()
-                        .getTotalTokens() : 0)
-                    .build();
+    // Parse and process the message to detect and execute external tool calls
+    return messageParserService.parseAndProcessMessage(userContent)
+        .flatMap(processedContent -> {
+            // Save user message with original content
+            Message userMessage = Message.builder()
+                .chatId(chatId)
+                .content(userContent)
+                .role(MessageRole.USER)
+                .createdAt(LocalDateTime.now())
+                .build();
 
-                return messageRepository.save(aiMessage)
-                    .flatMap(savedAiMessage -> {
-                      // Update chat with token usage and cost
-                      return updateChatStats(chatId, aiResponse)
-                          .then(Mono.just(ChatResponse.builder()
-                              .content(aiResponse.getContent())
-                              .model(aiResponse.getModel())
-                              .temperature(request.getTemperature())
-                              .tokenUsage(aiResponse.getTokenUsage())
-                              .estimatedCost(aiResponse.getEstimatedCost())
-                              .chatId(chatId)
-                              .messageId(savedAiMessage.getId())
-                              .build()));
-                    });
-              });
+            return messageRepository.save(userMessage)
+                .flatMap(savedUserMessage -> {
+                    // If the content was processed by a tool, create a modified request
+                    ChatRequest modifiedRequest = request;
+                    if (!processedContent.equals(userContent)) {
+                        // Create a copy of the first message with the processed content
+                        Message processedMessage = Message.builder()
+                            .content(processedContent)
+                            .role(request.getMessages().getFirst().getRole())
+                            .build();
+
+                        // Create a new request with the processed message
+                        modifiedRequest = ChatRequest.builder()
+                            .messages(List.of(processedMessage))
+                            .model(request.getModel())
+                            .maxTokens(request.getMaxTokens())
+                            .temperature(request.getTemperature())
+                            .systemMessage(request.getSystemMessage())
+                            .attachmentIds(request.getAttachmentIds())
+                            .externalToolIds(request.getExternalToolIds())
+                            .build();
+
+                        // Log that the message was processed by a tool
+                        log.info("Message processed by external tool: original='{}', processed='{}'", 
+                            userContent, processedContent);
+                    }
+
+                    // Get AI response
+                    return openAIService.sendChatRequest(modifiedRequest)
+                        .flatMap(aiResponse -> {
+                            // Save AI response message
+                            Message aiMessage = Message.builder()
+                                .chatId(chatId)
+                                .content(aiResponse.getContent())
+                                .role(MessageRole.ASSISTANT)
+                                .createdAt(LocalDateTime.now())
+                                .tokens(aiResponse.getTokenUsage() != null ? aiResponse.getTokenUsage()
+                                    .getTotalTokens() : 0)
+                                .build();
+
+                            return messageRepository.save(aiMessage)
+                                .flatMap(savedAiMessage -> {
+                                    // Update chat with token usage and cost
+                                    return updateChatStats(chatId, aiResponse)
+                                        .then(Mono.just(ChatResponse.builder()
+                                            .content(aiResponse.getContent())
+                                            .model(aiResponse.getModel())
+                                            .temperature(request.getTemperature())
+                                            .tokenUsage(aiResponse.getTokenUsage())
+                                            .estimatedCost(aiResponse.getEstimatedCost())
+                                            .chatId(chatId)
+                                            .messageId(savedAiMessage.getId())
+                                            .build()));
+                                });
+                        });
+                });
         })
         .doOnSuccess(response -> log.info("Processed message for chat {}", chatId))
         .doOnError(error -> log.error("Error processing message for chat {}: {}", chatId,
@@ -186,24 +218,56 @@ public class ChatService {
       return Mono.error(new IllegalArgumentException("Message cannot be null or empty"));
     }
 
-    // Convert SimpleMessageRequest to ChatRequest
-    Message userMessage = Message.builder()
-        .content(request.getMessage().trim())
-        .role(Message.MessageRole.USER)
-        .build();
+    String userContent = request.getMessage().trim();
 
-    ChatRequest chatRequest = ChatRequest.builder()
-        .messages(List.of(userMessage))
-        .model(request.getModel())
-        .maxTokens(request.getMaxTokens())
-        .temperature(request.getTemperature())
-        .systemMessage(request.getSystemMessage())
-        .attachmentIds(request.getAttachmentIds())
-        .externalToolIds(request.getExternalToolIds())
-        .build();
+    // Parse and process the message to detect and execute external tool calls
+    return messageParserService.parseAndProcessMessage(userContent)
+        .flatMap(processedContent -> {
+            // Convert SimpleMessageRequest to ChatRequest
+            Message userMessage = Message.builder()
+                .content(userContent)
+                .role(Message.MessageRole.USER)
+                .build();
 
-    // Delegate to existing method
-    return sendMessage(chatId, chatRequest);
+            // If the content was processed by a tool, use the processed content
+            if (!processedContent.equals(userContent)) {
+                log.info("Simple message processed by external tool: original='{}', processed='{}'", 
+                    userContent, processedContent);
+
+                // Create a message with the processed content
+                Message processedMessage = Message.builder()
+                    .content(processedContent)
+                    .role(Message.MessageRole.USER)
+                    .build();
+
+                ChatRequest chatRequest = ChatRequest.builder()
+                    .messages(List.of(processedMessage))
+                    .model(request.getModel())
+                    .maxTokens(request.getMaxTokens())
+                    .temperature(request.getTemperature())
+                    .systemMessage(request.getSystemMessage())
+                    .attachmentIds(request.getAttachmentIds())
+                    .externalToolIds(request.getExternalToolIds())
+                    .build();
+
+                // Delegate to existing method
+                return sendMessage(chatId, chatRequest);
+            } else {
+                // Use the original content
+                ChatRequest chatRequest = ChatRequest.builder()
+                    .messages(List.of(userMessage))
+                    .model(request.getModel())
+                    .maxTokens(request.getMaxTokens())
+                    .temperature(request.getTemperature())
+                    .systemMessage(request.getSystemMessage())
+                    .attachmentIds(request.getAttachmentIds())
+                    .externalToolIds(request.getExternalToolIds())
+                    .build();
+
+                // Delegate to existing method
+                return sendMessage(chatId, chatRequest);
+            }
+        });
   }
 
   private Mono<Chat> loadMessagesForChat(Chat chat) {

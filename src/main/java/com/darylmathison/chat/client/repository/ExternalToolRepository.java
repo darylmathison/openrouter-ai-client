@@ -20,6 +20,15 @@ public interface ExternalToolRepository extends R2dbcRepository<ExternalTool, Lo
 
   Flux<ExternalTool> findByNameContainingIgnoreCaseOrderByUsageCountDesc(String name);
 
+  /**
+   * Find a tool by its exact name (case insensitive).
+   * 
+   * @param name The name of the tool to find
+   * @return A Mono containing the tool if found, or an empty Mono if not found
+   */
+  @Query("SELECT * FROM external_tools WHERE LOWER(name) = LOWER(:name) LIMIT 1")
+  Mono<ExternalTool> findByNameIgnoreCase(@Param("name") String name);
+
   @Query("SELECT * FROM external_tools WHERE is_active = true ORDER BY usage_count DESC")
   Flux<ExternalTool> findActiveToolsOrderByUsage();
 

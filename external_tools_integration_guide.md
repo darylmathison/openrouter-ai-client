@@ -128,7 +128,7 @@ app = Flask(__name__)
 @app.route('/execute', methods=['POST'])
 def execute_crew():
     data = request.json
-    
+
     # Define agents
     researcher = Agent(
         role='Researcher',
@@ -136,34 +136,34 @@ def execute_crew():
         backstory='You are an expert researcher with access to vast knowledge',
         verbose=True
     )
-    
+
     writer = Agent(
         role='Writer', 
         goal='Write engaging content based on research',
         backstory='You are a skilled writer who creates compelling content',
         verbose=True
     )
-    
+
     # Define tasks
     research_task = Task(
         description=f"Research: {data.get('topic', '')}",
         agent=researcher
     )
-    
+
     write_task = Task(
         description=f"Write a {data.get('content_type', 'blog post')} about the research findings",
         agent=writer
     )
-    
+
     # Create and run crew
     crew = Crew(
         agents=[researcher, writer],
         tasks=[research_task, write_task],
         verbose=True
     )
-    
+
     result = crew.kickoff()
-    
+
     return jsonify({
         'status': 'success',
         'result': str(result),
@@ -198,9 +198,33 @@ Response Mapping:
   "metadata_path": "agents_used"
 }
 
-#### 3. Using CrewAI in Chat
+#### 3. Using External Tools in Chat
 
-Once configured, you can use CrewAI in your chats:
+There are two ways to use external tools in your chats:
+
+##### Method 1: Using the @{{name}} Format
+
+You can directly call an external tool in your message using the @{{name}} format:
+
+```
+User: @{{Weather}} What's the weather like in New York today?
+
+AI: I've checked the weather for New York:
+Current temperature: 72°F
+Conditions: Partly cloudy
+Humidity: 65%
+Wind: 8 mph NE
+```
+
+The format works as follows:
+- Start with `@{{` followed by the exact name of the tool
+- Close with `}}` 
+- Add the input for the tool after the closing brackets
+- The tool will be executed and its output will be sent to the AI model
+
+##### Method 2: Using CrewAI (Legacy Method)
+
+You can also use CrewAI in your chats by mentioning it:
 
 User: Use CrewAI to create a blog post about "The Future of AI in Healthcare"
 
