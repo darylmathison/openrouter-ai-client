@@ -168,7 +168,11 @@ class ChatGPTClient {
 
         // Role indicator
         const roleSpan = document.createElement('span');
-        roleSpan.className = 'text-xs font-medium text-gray-500';
+        if(role === 'user') {
+          roleSpan.className = 'text-xs font-medium text-gray-200';
+        } else {
+          roleSpan.className = 'text-xs font-medium text-gray-500';
+        }
         roleSpan.textContent = role.charAt(0).toUpperCase() + role.slice(1);
         headerDiv.appendChild(roleSpan);
 
