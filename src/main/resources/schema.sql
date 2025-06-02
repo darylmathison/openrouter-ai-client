@@ -62,18 +62,26 @@ CREATE TABLE saved_prompts
 
 CREATE TABLE external_tools
 (
-    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name          VARCHAR(255) NOT NULL,
-    description   TEXT,
-    base_url      VARCHAR(500),
-    api_key       VARCHAR(255),
-    is_enabled    BOOLEAN DEFAULT TRUE,
-    tool_type     VARCHAR(50),
-    configuration TEXT,
-    created_at    TIMESTAMP    NOT NULL,
-    updated_at    TIMESTAMP    NOT NULL,
-    last_used_at  TIMESTAMP,
-    usage_count   BIGINT  DEFAULT 0
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name             VARCHAR(255) NOT NULL,
+    description      TEXT,
+    endpoint_url     VARCHAR(500),
+    http_method      VARCHAR(10),
+    auth_type        VARCHAR(20),
+    auth_config      TEXT,
+    request_template TEXT,
+    response_mapping TEXT,
+    is_active        BOOLEAN DEFAULT TRUE,
+    tool_type        VARCHAR(50),
+    created_at       TIMESTAMP    NOT NULL,
+    updated_at       TIMESTAMP    NOT NULL,
+    last_used_at     TIMESTAMP,
+    usage_count      BIGINT  DEFAULT 0,
+    -- Keep backward compatibility fields
+    base_url         VARCHAR(500),
+    api_key          VARCHAR(255),
+    is_enabled       BOOLEAN DEFAULT TRUE,
+    configuration    TEXT
 );
 
 -- Indexes for better performance
