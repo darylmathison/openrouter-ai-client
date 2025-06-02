@@ -176,13 +176,15 @@ class ChatGPTClient {
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'message-actions flex space-x-2';
 
-        // Add save/update buttons to both user and assistant messages
-        // Save as prompt button
-        const saveBtn = document.createElement('button');
-        saveBtn.className = 'text-xs text-blue-600 hover:text-blue-800';
-        saveBtn.textContent = 'Save as Prompt';
-        saveBtn.addEventListener('click', () => this.showPromptModal(content, role, null, metadata));
-        actionsDiv.appendChild(saveBtn);
+        // Add save as prompt button only to user messages
+        if (role === 'user') {
+            // Save as prompt button
+            const saveBtn = document.createElement('button');
+            saveBtn.className = 'text-xs text-white hover:text-gray-200';
+            saveBtn.textContent = 'Save as Prompt';
+            saveBtn.addEventListener('click', () => this.showPromptModal(content, role, null, metadata));
+            actionsDiv.appendChild(saveBtn);
+        }
 
         headerDiv.appendChild(actionsDiv);
         messageDiv.appendChild(headerDiv);
