@@ -3,16 +3,29 @@
 
 ## Overview
 
-The Custom ChatGPT Client supports integration with external tools and services, allowing you to extend the AI's capabilities beyond text generation. This guide covers how to configure, integrate, and use external tools like CrewAI, custom APIs, and other services.
+The Custom ChatGPT Client supports integration with external tools and services, allowing you to extend the AI's capabilities beyond text generation. This guide covers how to configure, integrate, and use external tools through the Model, Chat, Plugin (MCP) protocol, which provides a standardized way to interact with external tools through the chat interface.
 
 ## Architecture
 
-External tools are integrated through a flexible HTTP-based system that supports:
+External tools are integrated through the Model, Chat, Plugin (MCP) protocol, which provides a standardized way to interact with external tools through the chat interface. The MCP protocol supports:
+
 - REST API endpoints
 - Various authentication methods
 - Request/response templating
 - Error handling and retry logic
 - Asynchronous execution
+- Dynamic context expansion to accommodate information from external tools
+
+### MCP Protocol
+
+The MCP (Model, Chat, Plugin) protocol is a standardized way to interact with external tools through the chat interface. It provides a consistent format for tool calls and responses, making it easier to integrate new tools and services.
+
+Key features of the MCP protocol:
+
+1. **Standardized Tool Calls**: All external tool calls use the same format: `@{{toolName}} input`
+2. **Structured Responses**: Tool responses include metadata and context information
+3. **Dynamic Context Expansion**: The context can be dynamically expanded to accommodate information from external tools
+4. **REST Server Wrappers**: REST servers can be wrapped with MCP to make them accessible through the chat interface
 
 ## Tool Configuration
 
@@ -200,11 +213,11 @@ Response Mapping:
 
 #### 3. Using External Tools in Chat
 
-There are two ways to use external tools in your chats:
+All external tool interactions are now handled through the MCP protocol, which provides a standardized way to interact with tools through the chat interface.
 
-##### Method 1: Using the @{{name}} Format
+##### Using the MCP Protocol
 
-You can directly call an external tool in your message using the @{{name}} format:
+You can call any external tool in your message using the @{{name}} format:
 
 ```
 User: @{{Weather}} What's the weather like in New York today?
@@ -220,23 +233,44 @@ The format works as follows:
 - Start with `@{{` followed by the exact name of the tool
 - Close with `}}` 
 - Add the input for the tool after the closing brackets
-- The tool will be executed and its output will be sent to the AI model
+- The tool will be executed through the MCP protocol and its output will be sent to the AI model
 
-##### Method 2: Using CrewAI (Legacy Method)
+##### MCP Response Format
 
-You can also use CrewAI in your chats by mentioning it:
+When a tool is executed through the MCP protocol, the response includes metadata and context information:
 
-User: Use CrewAI to create a blog post about "The Future of AI in Healthcare"
+```json
+{
+  "tool_name": "Weather",
+  "tool_type": "API",
+  "input": "What's the weather like in New York today?",
+  "result": {
+    "temperature": 72,
+    "conditions": "Partly cloudy",
+    "humidity": 65,
+    "wind": "8 mph NE"
+  },
+  "mcp_version": "1.0"
+}
+```
 
-AI: I'll use the CrewAI tool to generate a comprehensive blog post for you.
+This structured format makes it easier for the AI model to understand and use the information from the tool.
 
-[Tool executes and returns content]
+##### Using MCP REST Wrappers
 
-Here's the blog post created by the CrewAI research and writing team:
+You can also use REST servers through the MCP protocol by creating an MCP wrapper:
 
-# The Future of AI in Healthcare
+```
+User: @{{MyRESTService}} Query the database for user information
 
-[Generated content appears here in markdown format]
+AI: I've queried the database through the REST service:
+User ID: 12345
+Name: John Doe
+Email: john.doe@example.com
+Status: Active
+```
+
+The MCP wrapper handles the communication with the REST server and formats the response according to the MCP protocol.
 
 ### Weather API Integration
 
@@ -315,12 +349,72 @@ Response Mapping:
 
 ## Advanced Features
 
+### Creating MCP Wrappers for REST Servers
+
+You can create MCP wrappers for REST servers to make them accessible through the MCP protocol in the chat interface. This allows you to use any REST API as an external tool in your chats.
+
+#### Using the API
+
+To create an MCP wrapper for a REST server, use the following API endpoint:
+
+```
+POST /api/tools/mcp-wrapper?restServerUrl=https://api.example.com&restServerName=MyRESTService
+```
+
+Parameters:
+- `restServerUrl`: The URL of the REST server
+- `restServerName`: The name to use for the REST server in the chat interface
+
+Response:
+```json
+{
+  "id": 123,
+  "name": "MyRESTService",
+  "description": "MCP wrapper for REST server: https://api.example.com",
+  "endpointUrl": "https://api.example.com",
+  "httpMethod": "POST",
+  "authType": "NONE",
+  "requestTemplate": "{\"query\": \"{{input}}\", \"mcp_enabled\": true}",
+  "responseMapping": "{\"extract\": \"/result\"}",
+  "isActive": true,
+  "toolType": "MCP_REST_WRAPPER",
+  "isMcpEnabled": true
+}
+```
+
+#### Listing MCP Wrappers
+
+To list all MCP wrappers, use the following API endpoint:
+
+```
+GET /api/tools/mcp-wrappers
+```
+
+Response:
+```json
+[
+  {
+    "id": 123,
+    "name": "MyRESTService",
+    "description": "MCP wrapper for REST server: https://api.example.com",
+    "endpointUrl": "https://api.example.com",
+    "httpMethod": "POST",
+    "authType": "NONE",
+    "requestTemplate": "{\"query\": \"{{input}}\", \"mcp_enabled\": true}",
+    "responseMapping": "{\"extract\": \"/result\"}",
+    "isActive": true,
+    "toolType": "MCP_REST_WRAPPER",
+    "isMcpEnabled": true
+  }
+]
+```
+
 ### Tool Chaining
 
 You can chain multiple tools together for complex workflows:
 
 1. Sequential Execution:
-   User: First, get the weather for New York, then use CrewAI to write a travel blog post based on the weather conditions.
+   User: First, get the weather for New York, then use the travel planner to suggest activities based on the weather conditions.
 
 2. Conditional Logic:
    User: Check the customer status in the CRM. If they're a premium customer, use the premium content generator tool.

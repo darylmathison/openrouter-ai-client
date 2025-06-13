@@ -18,6 +18,15 @@ public interface ExternalToolRepository extends R2dbcRepository<ExternalTool, Lo
 
   Flux<ExternalTool> findByToolTypeOrderByUsageCountDesc(String toolType);
 
+  /**
+   * Find tools by type and active status.
+   * 
+   * @param toolType The type of tools to find
+   * @param isActive Whether to find active or inactive tools
+   * @return A Flux of tools matching the criteria
+   */
+  Flux<ExternalTool> findByToolTypeAndIsActive(String toolType, Boolean isActive);
+
   Flux<ExternalTool> findByNameContainingIgnoreCaseOrderByUsageCountDesc(String name);
 
   /**

@@ -2,6 +2,7 @@ package com.darylmathison.chat.client.controller;
 
 import com.darylmathison.chat.client.service.AIService;
 import com.darylmathison.chat.client.service.ChatService;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +29,9 @@ public class ModelController {
 
     @Value("${openrouter.credits.initial:10.0}")
     private Double initialCredits;
+
+    @Value("${openrouter.default.max-tokens:4000}")
+    private Integer defaultMaxTokens;
 
     // In-memory storage for selected models (in a real app, this would be in a database)
     private static final Set<String> selectedModels = ConcurrentHashMap.newKeySet();
@@ -89,5 +93,13 @@ public class ModelController {
 
             return ResponseEntity.ok(response);
         });
+    }
+
+    @GetMapping("/config")
+    public Mono<ResponseEntity<Map<String, Object>>> getModelConfig() {
+        Map<String, Object> config = new HashMap<>();
+        config.put("maxTokens", defaultMaxTokens);
+
+        return Mono.just(ResponseEntity.ok(config));
     }
 }

@@ -8,6 +8,7 @@ class ChatGPTClient {
         this.currentModel = 'openai/gpt-3.5-turbo';
         this.availableModels = [];
         this.selectedModels = [];
+        this.defaultMaxTokens = 4000; // Default value until config is loaded
         this.init();
     }
 
@@ -18,6 +19,22 @@ class ChatGPTClient {
         this.updateBalance();
         this.setupAutoResize();
         this.loadModels();
+        this.loadConfig();
+    }
+
+    async loadConfig() {
+        try {
+            const response = await fetch(`${this.apiBase}/models/config`);
+            if (response.ok) {
+                const config = await response.json();
+                console.log('Loaded config:', config);
+                if (config.maxTokens) {
+                    this.defaultMaxTokens = config.maxTokens;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading config:', error);
+        }
     }
 
     setupEventListeners() {
@@ -109,7 +126,7 @@ class ChatGPTClient {
             const requestBody = {
               messages: [{content: message, role: 'USER'}],
               model: this.currentModel,
-              maxTokens: 1000,
+              maxTokens: this.defaultMaxTokens,
               temperature: 0.7
             };
 
@@ -893,7 +910,7 @@ class ChatGPTClient {
                 prompt: document.getElementById('prompt-content').value,
                 systemMessage: document.getElementById('prompt-system').value,
                 modelName: document.getElementById('prompt-model').value,
-                maxTokens: parseInt(document.getElementById('prompt-max-tokens').value) || 1000,
+                maxTokens: parseInt(document.getElementById('prompt-max-tokens').value) || this.defaultMaxTokens,
                 temperature: parseFloat(document.getElementById('prompt-temperature').value) || 0.7,
                 category: 'General'
             };

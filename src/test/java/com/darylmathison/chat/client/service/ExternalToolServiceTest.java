@@ -39,6 +39,9 @@ class ExternalToolServiceTest {
   @Mock
   private ObjectMapper objectMapper;
 
+  @Mock
+  private MCPService mcpService;
+
   private ExternalToolService externalToolService;
 
   @BeforeEach
@@ -209,6 +212,133 @@ class ExternalToolServiceTest {
     // When & Then
     StepVerifier.create(externalToolService.updateTool(toolId, toolDto))
         .expectNextMatches(result -> result.getName().equals("Updated Tool"))
+        .verifyComplete();
+  }
+
+  @Test
+  void getToolsByType_ShouldReturnToolsOfSpecifiedType() {
+    // Given
+    String toolType = "MCP";
+
+    ExternalTool tool1 = ExternalTool.builder()
+        .id(1L)
+        .name("MCP Tool 1")
+        .toolType(toolType)
+        .isActive(true)
+        .build();
+
+    ExternalTool tool2 = ExternalTool.builder()
+        .id(2L)
+        .name("MCP Tool 2")
+        .toolType(toolType)
+        .isActive(true)
+        .build();
+
+    when(externalToolRepository.findByToolTypeAndIsActive(toolType, true))
+        .thenReturn(Flux.just(tool1, tool2));
+
+    // When & Then
+    StepVerifier.create(externalToolService.getToolsByType(toolType))
+        .expectNextMatches(tools -> 
+            tools.size() == 2 && 
+            tools.get(0).getName().equals("MCP Tool 1") &&
+            tools.get(1).getName().equals("MCP Tool 2"))
+        .verifyComplete();
+  }
+
+  @Test
+  void setMcpService_ShouldSetMcpService() {
+    // Given
+    MCPService mcpService = mock(MCPService.class);
+
+    // When
+    externalToolService.setMcpService(mcpService);
+
+    // Then
+    // This is a bit tricky to test directly since mcpService is a private field
+    // We'll test it indirectly by executing a tool with MCP enabled
+
+    Long toolId = 1L;
+    Map<String, Object> parameters = Map.of("input", "test input");
+    String mcpResponse = "MCP response";
+
+    ExternalTool mcpEnabledTool = ExternalTool.builder()
+        .id(toolId)
+        .name("MCP Tool")
+        .isMcpEnabled(true)
+        .isActive(true)
+        .build();
+
+    when(externalToolRepository.findById(toolId)).thenReturn(Mono.just(mcpEnabledTool));
+    when(mcpService.executeMCPTool(mcpEnabledTool, "test input")).thenReturn(Mono.just(mcpResponse));
+    when(externalToolRepository.recordUsage(toolId)).thenReturn(Mono.just(1));
+
+    StepVerifier.create(externalToolService.executeTool(toolId, parameters))
+        .expectNext(mcpResponse)
+        .verifyComplete();
+  }
+
+  @Test
+  void executeTool_WithMcpEnabledTool_ShouldUseMcpService() {
+    // Given
+    Long toolId = 1L;
+    Map<String, Object> parameters = Map.of("input", "test input");
+    String mcpResponse = "MCP response";
+
+    ExternalTool mcpEnabledTool = ExternalTool.builder()
+        .id(toolId)
+        .name("MCP Tool")
+        .isMcpEnabled(true)
+        .isActive(true)
+        .build();
+
+    // Set the MCPService
+    externalToolService.setMcpService(mcpService);
+
+    when(externalToolRepository.findById(toolId)).thenReturn(Mono.just(mcpEnabledTool));
+    when(mcpService.executeMCPTool(mcpEnabledTool, "test input")).thenReturn(Mono.just(mcpResponse));
+    when(externalToolRepository.recordUsage(toolId)).thenReturn(Mono.just(1));
+
+    // When & Then
+    StepVerifier.create(externalToolService.executeTool(toolId, parameters))
+        .expectNext(mcpResponse)
+        .verifyComplete();
+  }
+
+  @Test
+  void executeTool_WithMcpEnabledToolButNoMcpService_ShouldFallbackToStandardExecution() {
+    // Given
+    Long toolId = 1L;
+    Map<String, Object> parameters = Map.of("param1", "value1");
+
+    ExternalTool mcpEnabledTool = ExternalTool.builder()
+        .id(toolId)
+        .name("MCP Tool")
+        .isMcpEnabled(true)
+        .isActive(true)
+        .endpointUrl("https://api.example.com")
+        .httpMethod(ExternalTool.HttpMethod.GET)
+        .build();
+
+    // Don't set the MCPService to test fallback
+
+    WebClient.RequestHeadersUriSpec requestHeadersUriSpec = mock(
+        WebClient.RequestHeadersUriSpec.class);
+    WebClient.RequestHeadersSpec requestHeadersSpec = mock(WebClient.RequestHeadersSpec.class);
+    WebClient.ResponseSpec responseSpec = mock(WebClient.ResponseSpec.class);
+
+    when(externalToolRepository.findById(toolId)).thenReturn(Mono.just(mcpEnabledTool));
+    when(externalToolRepository.recordUsage(toolId)).thenReturn(Mono.just(1));
+    when(webClient.get()).thenReturn(requestHeadersUriSpec);
+    when(requestHeadersUriSpec.uri(anyString())).thenReturn(requestHeadersSpec);
+    when(requestHeadersSpec.headers(any())).thenReturn(requestHeadersSpec);
+    when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+    when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+    when(responseSpec.bodyToMono(String.class)).thenReturn(Mono.just("Success"));
+
+    // When & Then
+    StepVerifier.create(externalToolService.executeTool(toolId, parameters))
+        .expectNext("Success")
         .verifyComplete();
   }
 }

@@ -28,13 +28,17 @@ class ModelControllerTest {
   @BeforeEach
   void setUp() {
     modelController = new ModelController(aiService, chatService);
-    // Set initialCredits via reflection since it's injected via @Value
+    // Set initialCredits and defaultMaxTokens via reflection since they're injected via @Value
     try {
-      java.lang.reflect.Field field = ModelController.class.getDeclaredField("initialCredits");
-      field.setAccessible(true);
-      field.set(modelController, 10.0);
+      java.lang.reflect.Field creditsField = ModelController.class.getDeclaredField("initialCredits");
+      creditsField.setAccessible(true);
+      creditsField.set(modelController, 10.0);
+
+      java.lang.reflect.Field maxTokensField = ModelController.class.getDeclaredField("defaultMaxTokens");
+      maxTokensField.setAccessible(true);
+      maxTokensField.set(modelController, 4000);
     } catch (Exception e) {
-      throw new RuntimeException("Failed to set initialCredits", e);
+      throw new RuntimeException("Failed to set test values", e);
     }
   }
 
@@ -120,6 +124,22 @@ class ModelControllerTest {
                    body.get("totalCost").equals(totalCost) &&
                    body.get("calculatedRemainingCredits").equals(6.5) &&
                    body.get("actualCredits").equals(actualCredits);
+        })
+        .verifyComplete();
+  }
+
+  @Test
+  void getModelConfig_ReturnsCorrectConfig() {
+    // When & Then
+    StepVerifier.create(modelController.getModelConfig())
+        .expectNextMatches(response -> {
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                return false;
+            }
+
+            Map<String, Object> body = response.getBody();
+            return body.containsKey("maxTokens") &&
+                   body.get("maxTokens").equals(4000);
         })
         .verifyComplete();
   }

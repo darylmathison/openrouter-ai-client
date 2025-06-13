@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -23,13 +25,29 @@ import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ExternalToolService {
 
   private final ExternalToolRepository externalToolRepository;
   private final WebClient.Builder webClientBuilder;
   private final ObjectMapper objectMapper;
+
+  private MCPService mcpService;
+
+  @Autowired
+  public ExternalToolService(
+      ExternalToolRepository externalToolRepository,
+      WebClient.Builder webClientBuilder,
+      ObjectMapper objectMapper) {
+    this.externalToolRepository = externalToolRepository;
+    this.webClientBuilder = webClientBuilder;
+    this.objectMapper = objectMapper;
+  }
+
+  @Autowired
+  public void setMcpService(@Lazy MCPService mcpService) {
+    this.mcpService = mcpService;
+  }
 
   public Mono<ExternalToolDto> saveTool(ExternalToolDto toolDto) {
     ExternalTool tool = ExternalTool.builder()
@@ -64,6 +82,20 @@ public class ExternalToolService {
         .doOnError(error -> log.error("Error retrieving active tools: {}", error.getMessage()));
   }
 
+  /**
+   * Get tools by type.
+   *
+   * @param toolType The type of tools to retrieve
+   * @return A Mono containing a list of tools of the specified type
+   */
+  public Mono<List<ExternalToolDto>> getToolsByType(String toolType) {
+    return externalToolRepository.findByToolTypeAndIsActive(toolType, true)
+        .map(this::convertToDto)
+        .collectList()
+        .doOnSuccess(tools -> log.info("Retrieved {} tools of type {}", tools.size(), toolType))
+        .doOnError(error -> log.error("Error retrieving tools of type {}: {}", toolType, error.getMessage()));
+  }
+
   public Mono<String> executeTool(Long toolId, Map<String, Object> parameters) {
     return externalToolRepository.findById(toolId)
         .switchIfEmpty(
@@ -73,6 +105,27 @@ public class ExternalToolService {
             return Mono.error(
                 new RuntimeException("External tool is not active: " + tool.getName()));
           }
+
+          // Check if this is an MCP-enabled tool
+          if (tool.getIsMcpEnabled() != null && tool.getIsMcpEnabled()) {
+            log.info("Executing MCP-enabled tool: {}", tool.getName());
+
+            // If this is an MCP tool call but mcpService is not initialized yet, use standard execution
+            if (mcpService == null) {
+              log.warn("MCPService not initialized, falling back to standard execution for tool: {}", tool.getName());
+              return executeToolRequest(tool, parameters)
+                  .flatMap(response -> externalToolRepository.recordUsage(toolId).then(Mono.just(response)));
+            }
+
+            // Extract the input parameter for MCP processing
+            String input = parameters.containsKey("input") ? parameters.get("input").toString() : "";
+
+            // Use MCPService to execute the tool
+            return mcpService.executeMCPTool(tool, input)
+                .flatMap(response -> externalToolRepository.recordUsage(toolId).then(Mono.just(response)));
+          }
+
+          // Standard execution for non-MCP tools
           return executeToolRequest(tool, parameters)
               .flatMap(response -> {
                 // Record usage after successful execution
@@ -285,7 +338,7 @@ public class ExternalToolService {
     }
   }
 
-  private ExternalToolDto convertToDto(ExternalTool tool) {
+  public ExternalToolDto convertToDto(ExternalTool tool) {
     return ExternalToolDto.builder()
         .id(tool.getId())
         .name(tool.getName())

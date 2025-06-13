@@ -49,7 +49,14 @@ public class ExternalTool {
   private Boolean isActive = true;
 
   @Column("tool_type")
-  private String toolType; // API, WEBHOOK, etc.
+  private String toolType; // API, WEBHOOK, MCP, MCP_REST_WRAPPER, etc.
+
+  @Column("is_mcp_enabled")
+  @Builder.Default
+  private Boolean isMcpEnabled = true; // Whether this tool uses the MCP protocol
+
+  @Column("mcp_config")
+  private String mcpConfig; // JSON string for MCP-specific configuration
 
   @Column("created_at")
   private LocalDateTime createdAt;

@@ -51,6 +51,15 @@ class AIServiceTest {
 
     // Create AIService with mocked WebClient
     aiService = new AIService(webClientMock, costCalculationService);
+
+    // Set defaultMaxTokens via reflection since it's injected via @Value
+    try {
+      java.lang.reflect.Field field = AIService.class.getDeclaredField("defaultMaxTokens");
+      field.setAccessible(true);
+      field.set(aiService, 4000);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to set defaultMaxTokens", e);
+    }
   }
 
   @Test
@@ -135,5 +144,70 @@ class AIServiceTest {
             throwable.getMessage().contains("Authentication failed with OpenRouter") &&
             throwable.getMessage().contains("OPENROUTER_API_KEY environment variable"))
         .verify();
+  }
+
+  @Test
+  void sendChatRequest_UsesDefaultMaxTokens_WhenNotSpecified() {
+    // Given
+    Message message = new Message();
+    message.setRole(MessageRole.USER);
+    message.setContent("Test message");
+
+    ChatRequest chatRequest = ChatRequest.builder()
+        .messages(List.of(message))
+        .model("openai/gpt-4")
+        // Not specifying maxTokens, should use default value
+        .build();
+
+    // Setup WebClient mock chain for POST request
+    when(webClientMock.post()).thenReturn(requestBodyUriSpecMock);
+    when(requestBodyUriSpecMock.uri("/chat/completions")).thenReturn(requestBodySpecMock);
+    when(requestBodySpecMock.contentType(org.springframework.http.MediaType.APPLICATION_JSON)).thenReturn(requestBodySpecMock);
+
+    // Capture the request body to verify it contains the default maxTokens
+    org.mockito.ArgumentCaptor<String> requestBodyCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+    when(requestBodySpecMock.bodyValue(requestBodyCaptor.capture())).thenReturn(requestHeadersSpecMock);
+
+    // Mock the response
+    when(requestHeadersSpecMock.retrieve()).thenReturn(responseSpecMock);
+
+    // Create a sample response
+    ObjectNode responseJson = objectMapper.createObjectNode();
+    ObjectNode choiceNode = objectMapper.createObjectNode();
+    ObjectNode messageNode = objectMapper.createObjectNode();
+    messageNode.put("content", "Test response");
+    choiceNode.set("message", messageNode);
+    ArrayNode choicesArray = responseJson.putArray("choices");
+    choicesArray.add(choiceNode);
+
+    ObjectNode usageNode = objectMapper.createObjectNode();
+    usageNode.put("prompt_tokens", 10);
+    usageNode.put("completion_tokens", 20);
+    usageNode.put("total_tokens", 30);
+    responseJson.set("usage", usageNode);
+
+    when(responseSpecMock.bodyToMono(JsonNode.class)).thenReturn(Mono.just(responseJson));
+
+    // Mock cost calculation
+    when(costCalculationService.calculateCost(org.mockito.ArgumentMatchers.anyString(), 
+                                             org.mockito.ArgumentMatchers.anyInt(), 
+                                             org.mockito.ArgumentMatchers.anyInt()))
+        .thenReturn(0.01);
+
+    // When
+    aiService.sendChatRequest(chatRequest).block();
+
+    // Then
+    String capturedRequestBody = requestBodyCaptor.getValue();
+    JsonNode requestBodyJson = null;
+    try {
+        requestBodyJson = objectMapper.readTree(capturedRequestBody);
+    } catch (Exception e) {
+        throw new RuntimeException("Failed to parse request body", e);
+    }
+
+    // Verify the request body contains the default maxTokens value
+    assert requestBodyJson.has("max_tokens") : "Request body should have max_tokens field";
+    assert requestBodyJson.get("max_tokens").asInt() == 4000 : "max_tokens should be 4000";
   }
 }

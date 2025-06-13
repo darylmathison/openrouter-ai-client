@@ -7,7 +7,9 @@ import static org.mockito.Mockito.when;
 
 import com.darylmathison.chat.client.config.TestSecurityConfig;
 import com.darylmathison.chat.client.dto.ExternalToolDto;
+import com.darylmathison.chat.client.model.ExternalTool;
 import com.darylmathison.chat.client.service.ExternalToolService;
+import com.darylmathison.chat.client.service.MCPService;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,9 @@ class ExternalToolControllerTest {
 
   @MockBean
   private ExternalToolService externalToolService;
+
+  @MockBean
+  private MCPService mcpService;
 
   @Test
   void saveTool_ShouldReturnCreatedTool() {
@@ -108,5 +113,88 @@ class ExternalToolControllerTest {
         .uri("/api/tools/{toolId}", toolId)
         .exchange()
         .expectStatus().isNoContent();
+  }
+
+  @Test
+  void createMCPWrapper_ShouldReturnCreatedWrapper() {
+    // Given
+    String restServerUrl = "https://api.example.com";
+    String restServerName = "ExampleAPI";
+
+    ExternalTool mcpWrapper = ExternalTool.builder()
+        .id(1L)
+        .name(restServerName)
+        .description("MCP wrapper for REST server: " + restServerUrl)
+        .endpointUrl(restServerUrl)
+        .toolType("MCP_REST_WRAPPER")
+        .build();
+
+    ExternalToolDto mcpWrapperDto = ExternalToolDto.builder()
+        .id(1L)
+        .name(restServerName)
+        .description("MCP wrapper for REST server: " + restServerUrl)
+        .endpointUrl(restServerUrl)
+        .toolType("MCP_REST_WRAPPER")
+        .build();
+
+    when(mcpService.createMCPWrapperForRESTServer(restServerUrl, restServerName))
+        .thenReturn(Mono.just(mcpWrapper));
+    when(externalToolService.convertToDto(mcpWrapper)).thenReturn(mcpWrapperDto);
+
+    // When & Then
+    webTestClient.post()
+        .uri(uriBuilder -> uriBuilder
+            .path("/api/tools/mcp-wrapper")
+            .queryParam("restServerUrl", restServerUrl)
+            .queryParam("restServerName", restServerName)
+            .build())
+        .exchange()
+        .expectStatus().isOk()
+        .expectBody(ExternalToolDto.class)
+        .value(wrapper -> {
+            assertThat(wrapper.getId()).isEqualTo(1L);
+            assertThat(wrapper.getName()).isEqualTo(restServerName);
+            assertThat(wrapper.getToolType()).isEqualTo("MCP_REST_WRAPPER");
+        });
+  }
+
+  @Test
+  void getMCPTools_ShouldReturnMCPTools() {
+    // Given
+    List<ExternalToolDto> mcpTools = List.of(
+        ExternalToolDto.builder().id(1L).name("MCP Tool 1").toolType("MCP").build(),
+        ExternalToolDto.builder().id(2L).name("MCP Tool 2").toolType("MCP").build()
+    );
+
+    when(externalToolService.getToolsByType("MCP")).thenReturn(Mono.just(mcpTools));
+
+    // When & Then
+    webTestClient.get()
+        .uri("/api/tools/mcp")
+        .exchange()
+        .expectStatus().isOk()
+        .expectBodyList(ExternalToolDto.class)
+        .hasSize(2)
+        .contains(mcpTools.toArray(new ExternalToolDto[0]));
+  }
+
+  @Test
+  void getMCPWrappers_ShouldReturnMCPWrappers() {
+    // Given
+    List<ExternalToolDto> mcpWrappers = List.of(
+        ExternalToolDto.builder().id(1L).name("MCP Wrapper 1").toolType("MCP_REST_WRAPPER").build(),
+        ExternalToolDto.builder().id(2L).name("MCP Wrapper 2").toolType("MCP_REST_WRAPPER").build()
+    );
+
+    when(externalToolService.getToolsByType("MCP_REST_WRAPPER")).thenReturn(Mono.just(mcpWrappers));
+
+    // When & Then
+    webTestClient.get()
+        .uri("/api/tools/mcp-wrappers")
+        .exchange()
+        .expectStatus().isOk()
+        .expectBodyList(ExternalToolDto.class)
+        .hasSize(2)
+        .contains(mcpWrappers.toArray(new ExternalToolDto[0]));
   }
 }

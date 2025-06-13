@@ -43,3 +43,7 @@ openrouter:
     temperature: 0.7
   credits:
     initial: 10.0
+
+openweather:
+  api:
+    key: ${OPENWEATHER_API_KEY}
